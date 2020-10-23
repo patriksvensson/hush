@@ -4,7 +4,17 @@ Hush is a Windows application that mutes and unmutes the primary microphone.
 
 ![Animation showing Hush](res/hush.gif)
 
-# License
+## Building
+
+To build Hush, you will need to install [Cake](https://github.com/cake-build/cake)
+as a global [dotnet tool](https://docs.microsoft.com/en-us/dotnet/core/tools/global-tools) .
+
+```
+> dotnet tool restore
+> dotnet cake
+```
+
+## License
 
 Copyright © Patrik Svensson
 
