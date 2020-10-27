@@ -7,6 +7,7 @@ namespace Hush
     {
         private readonly TaskbarIcon _taskbar;
         private readonly MicrophoneThread _statusThread;
+        private readonly KeyboardHook _hook;
 
         [STAThread]
         public static void Main()
@@ -29,30 +30,30 @@ namespace Hush
         public Program()
         {
             _taskbar = new TaskbarIcon(Microphone.GetPrimaryMicrophoneStatus());
-            _taskbar.Initialized += OnInitialized;
-            _taskbar.ItemClicked += OnTaskBarItemClicked;
+            _taskbar.TaskbarInitialized += OnTaskBarInitialized;
+            _taskbar.TaskbarItemClicked += OnTaskBarItemClicked;
+            _taskbar.TaskbarDoubleClicked += OnTaskBarDoubleClicked;
 
             _statusThread = new MicrophoneThread();
             _statusThread.StateChanged += OnMicrophoneStateChanged;
             _statusThread.Start();
+
+            _hook = new KeyboardHook();
+            _hook.KeyCombinationPressed += OnKeyCombinationPressed;
         }
 
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
 
+            _hook.Dispose();
             _taskbar.Dispose();
             _statusThread.Dispose();
         }
 
-        private void OnInitialized(object? sender, EventArgs e)
+        private void OnTaskBarInitialized(object? sender, EventArgs e)
         {
             _taskbar.Update(Microphone.GetPrimaryMicrophoneStatus());
-        }
-
-        private void OnMicrophoneStateChanged(object? sender, MicrophoneStatus e)
-        {
-            _taskbar.Update(e);
         }
 
         private void OnTaskBarItemClicked(object? sender, TaskbarEvent @event)
@@ -63,31 +64,69 @@ namespace Hush
             }
             else if (@event == TaskbarEvent.Mute)
             {
-                // Mute microphone
-                var status = Microphone.SetPrimaryMicrophoneState(MicrophoneState.Muted);
-                if (status.State == MicrophoneState.Muted)
-                {
-                    _taskbar.ShowMessage("Muted microphone", status.Name);
-                    _taskbar.Update(status);
-                }
-                else
-                {
-                    _taskbar.ShowError($"An error occured when muting microphone {status.Name}.");
-                }
+                MuteMicrophone();
             }
             else if (@event == TaskbarEvent.Unmute)
             {
-                // Unmute microphone
-                var status = Microphone.SetPrimaryMicrophoneState(MicrophoneState.Unmuted);
-                if (status.State == MicrophoneState.Unmuted)
-                {
-                    _taskbar.ShowMessage("Unmuted microphone", status.Name);
-                    _taskbar.Update(status);
-                }
-                else
-                {
-                    _taskbar.ShowError($"An error occured when unmuting microphone {status.Name}.");
-                }
+                UnmuteMicrophone();
+            }
+        }
+
+        private void OnTaskBarDoubleClicked(object? sender, EventArgs e)
+        {
+            ToggleMicrophone();
+        }
+
+        private void OnMicrophoneStateChanged(object? sender, MicrophoneStatus e)
+        {
+            _taskbar.Update(e);
+        }
+
+        private void OnKeyCombinationPressed(object? sender, KeyPressedEventArgs e)
+        {
+            ToggleMicrophone();
+        }
+
+        private void ToggleMicrophone()
+        {
+            var status = Microphone.GetPrimaryMicrophoneStatus();
+            if (status.State == MicrophoneState.Unmuted)
+            {
+                MuteMicrophone();
+            }
+            else if (status.State == MicrophoneState.Muted)
+            {
+                UnmuteMicrophone();
+            }
+        }
+
+        private void MuteMicrophone()
+        {
+            // Mute microphone
+            var status = Microphone.SetPrimaryMicrophoneState(MicrophoneState.Muted);
+            if (status.State == MicrophoneState.Muted)
+            {
+                _taskbar.ShowMessage("Muted microphone", status.Name);
+                _taskbar.Update(status);
+            }
+            else
+            {
+                _taskbar.ShowError($"An error occured when muting microphone {status.Name}.");
+            }
+        }
+
+        private void UnmuteMicrophone()
+        {
+            // Unmute microphone
+            var status = Microphone.SetPrimaryMicrophoneState(MicrophoneState.Unmuted);
+            if (status.State == MicrophoneState.Unmuted)
+            {
+                _taskbar.ShowMessage("Unmuted microphone", status.Name);
+                _taskbar.Update(status);
+            }
+            else
+            {
+                _taskbar.ShowError($"An error occured when unmuting microphone {status.Name}.");
             }
         }
 

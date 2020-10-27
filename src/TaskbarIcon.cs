@@ -21,22 +21,25 @@ namespace Hush
         private readonly ToolStripMenuItem _exitMenuItem;
         private readonly ManualResetEvent _inititalized;
 
-        public event EventHandler Initialized = (s, e) => { };
-        public event EventHandler<TaskbarEvent> ItemClicked = (s, e) => { };
+        public event EventHandler TaskbarInitialized = (s, e) => { };
+        public event EventHandler<TaskbarEvent> TaskbarItemClicked = (s, e) => { };
+        public event EventHandler TaskbarDoubleClicked = (s, e) => { };
 
         public TaskbarIcon(MicrophoneStatus status)
         {
             _inititalized = new ManualResetEvent(false);
 
-            _muteMenuItem = new ToolStripMenuItem("Mute", null, (s, e) => ItemClicked(this, TaskbarEvent.Mute));
-            _unmuteMenuItem = new ToolStripMenuItem("Unmute", null, (s, e) => ItemClicked(this, TaskbarEvent.Unmute));
-            _exitMenuItem = new ToolStripMenuItem("Exit", null, (s, e) => ItemClicked(this, TaskbarEvent.Exit));
+            _muteMenuItem = new ToolStripMenuItem("Mute", null, (s, e) => TaskbarItemClicked(this, TaskbarEvent.Mute));
+            _muteMenuItem.ShortcutKeyDisplayString = "CTRL+ALT+M";
+            _unmuteMenuItem = new ToolStripMenuItem("Unmute", null, (s, e) => TaskbarItemClicked(this, TaskbarEvent.Unmute));
+            _unmuteMenuItem.ShortcutKeyDisplayString = "CTRL+ALT+M";
+            _exitMenuItem = new ToolStripMenuItem("Exit", null, (s, e) => TaskbarItemClicked(this, TaskbarEvent.Exit));
 
             _menu = new ContextMenuStrip();
             _menu.HandleCreated += (s, e) =>
             {
                 _inititalized.Set();
-                Initialized(this, EventArgs.Empty);
+                TaskbarInitialized(this, EventArgs.Empty);
             };
 
             _menu.Items.Add(_muteMenuItem);
@@ -44,12 +47,11 @@ namespace Hush
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add(_exitMenuItem);
 
-            _notifyIcon = new NotifyIcon
-            {
-                ContextMenuStrip = _menu,
-            };
+            _notifyIcon = new NotifyIcon();
+            _notifyIcon.ContextMenuStrip = _menu;
+            _notifyIcon.MouseDoubleClick += (s, e) => TaskbarDoubleClicked(s, e);
 
-            SetStatus(status);
+            UpdateTaskbarIcon(status);
         }
 
         public void Dispose()
@@ -64,10 +66,7 @@ namespace Hush
 
         public void ShowMessage(string title, string message)
         {
-            if (_inititalized.WaitOne(0))
-            {
-                _notifyIcon.ShowBalloonTip(1000, title, message, ToolTipIcon.Info);
-            }
+            _notifyIcon.ShowBalloonTip(1000, title, message, ToolTipIcon.Info);
         }
 
         public void ShowError(string message)
@@ -91,17 +90,44 @@ namespace Hush
 
         public void Update(MicrophoneStatus? status)
         {
-            if (_inititalized.WaitOne(0))
-            {
-                // Invoke on the UI thread
-                _menu.Invoke((Action)(() =>
-                {
-                    SetStatus(status);
-                }));
-            }
+            UpdateTaskbarIcon(status);
+            UpdateMenu(status);
         }
 
-        private void SetStatus(MicrophoneStatus? status)
+        private void UpdateMenu(MicrophoneStatus? status)
+        {
+            if (status == null)
+            {
+                return;
+            }
+
+            if (!_inititalized.WaitOne(0))
+            {
+                return;
+            }
+
+            // Invoke on the UI thread
+            _menu.Invoke((Action)(() =>
+            {
+                switch (status.State)
+                {
+                    case MicrophoneState.Muted:
+                        _muteMenuItem.Enabled = false;
+                        _unmuteMenuItem.Enabled = true;
+                        break;
+                    case MicrophoneState.Unmuted:
+                        _unmuteMenuItem.Enabled = false;
+                        _muteMenuItem.Enabled = true;
+                        break;
+                    case MicrophoneState.Error:
+                        _unmuteMenuItem.Enabled = false;
+                        _muteMenuItem.Enabled = false;
+                        break;
+                }
+            }));
+        }
+
+        private void UpdateTaskbarIcon(MicrophoneStatus? status)
         {
             if (status == null)
             {
@@ -115,18 +141,12 @@ namespace Hush
             {
                 case MicrophoneState.Muted:
                     _notifyIcon.Icon = Resources.Icon_Muted;
-                    _muteMenuItem.Enabled = false;
-                    _unmuteMenuItem.Enabled = true;
                     break;
                 case MicrophoneState.Unmuted:
                     _notifyIcon.Icon = Resources.Icon_Unmuted;
-                    _unmuteMenuItem.Enabled = false;
-                    _muteMenuItem.Enabled = true;
                     break;
                 case MicrophoneState.Error:
                     _notifyIcon.Icon = Resources.Icon_Error;
-                    _unmuteMenuItem.Enabled = false;
-                    _muteMenuItem.Enabled = false;
                     break;
             };
         }
